@@ -69,6 +69,7 @@ interface ErrorEvent {
   mapped_stack_trace?: MappedStackTrace;
   environment?: string;
   release_version?: string;
+  timestamp: string;
 }
 
 interface ListIssuesResponse {
@@ -91,6 +92,7 @@ const listSubcommand = new Command('list')
   .option('--offset <number>', 'Offset for pagination', '0')
   .option('--from <date>', 'Filter from date (YYYY-MM-DD)')
   .option('--to <date>', 'Filter to date (YYYY-MM-DD)')
+  .option('-f, --format <format>', 'Output format (table, json)', 'table')
   .action(async (options) => {
     try {
       // Read config from file
@@ -161,10 +163,21 @@ const listSubcommand = new Command('list')
 
       // Display results
       if (!data.issues || data.issues.length === 0) {
-        console.log(chalk.yellow('\nNo issues found.\n'));
+        if (options.format === 'json') {
+          console.log(JSON.stringify({ issues: [] }, null, 2));
+        } else {
+          console.log(chalk.yellow('\nNo issues found.\n'));
+        }
         return;
       }
 
+      // JSON format output
+      if (options.format === 'json') {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      // Table format output
       console.log(chalk.bold(`\n📋 Found ${chalk.cyan(data.issues.length)} issue${data.issues.length !== 1 ? 's' : ''}\n`));
 
       // Display table header
@@ -223,6 +236,7 @@ const showSubcommand = new Command('show')
   .option('-k, --api-key <key>', 'API key (overrides config)')
   .option('-u, --api-url <url>', 'API URL (overrides config)')
   .option('--show-minified', 'Show minified stack trace (if source maps available)')
+  .option('-f, --format <format>', 'Output format (pretty, json)', 'pretty')
   .action(async (issueId: string, options) => {
     try {
       // Read config from file
@@ -316,6 +330,12 @@ const showSubcommand = new Command('show')
       }
 
       spinner.succeed(chalk.green('Issue fetched'));
+
+      // JSON format output
+      if (options.format === 'json') {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
 
       // Display issue details
       console.log(chalk.bold(`\n📌 ${issue.title}\n`));
@@ -448,11 +468,173 @@ const showSubcommand = new Command('show')
     }
   });
 
+// Events subcommand
+const eventsSubcommand = new Command('events')
+  .description('List all events for an issue')
+  .argument('<issue-id>', 'Issue ID (short or full UUID)')
+  .option('-p, --project-id <id>', 'Project ID (overrides config)')
+  .option('-k, --api-key <key>', 'API key (overrides config)')
+  .option('-u, --api-url <url>', 'API URL (overrides config)')
+  .option('-l, --limit <number>', 'Number of events to fetch', '50')
+  .option('--offset <number>', 'Offset for pagination', '0')
+  .option('-f, --format <format>', 'Output format (table, json)', 'table')
+  .action(async (issueId: string, options) => {
+    try {
+      // Read config from file
+      const config = ConfigManager.getConfig();
+
+      const projectId = options.projectId || config.projectId;
+      const apiKey = options.apiKey || config.apiKey;
+      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
+
+      // Validate required parameters
+      if (!apiKey) {
+        console.error(chalk.red('\n✗ Error: API key is required\n'));
+        console.log('Options:');
+        console.log('  1. Run: keplog init (recommended)');
+        console.log('  2. Use flag: --api-key=<your-api-key>');
+        console.log('  3. Set env: KEPLOG_API_KEY=<your-api-key>\n');
+        process.exit(1);
+      }
+
+      let fullIssueId = issueId;
+
+      // If issue ID is short (8 chars), fetch full UUID from list
+      if (issueId.length === 8) {
+        if (!projectId) {
+          console.error(chalk.red('\n✗ Error: Project ID is required for short issue IDs\n'));
+          console.log('Options:');
+          console.log('  1. Run: keplog init (recommended)');
+          console.log('  2. Use flag: --project-id=<your-project-id>');
+          console.log('  3. Use full UUID instead of short ID\n');
+          process.exit(1);
+        }
+
+        const spinner = ora('Resolving short issue ID...').start();
+
+        // Fetch issues to find the full UUID
+        const listUrl = `${apiUrl}/api/v1/cli/projects/${projectId}/issues?limit=1000`;
+        const listResponse = await fetch(listUrl, {
+          method: 'GET',
+          headers: {
+            'X-API-Key': apiKey,
+          },
+        });
+
+        if (!listResponse.ok) {
+          spinner.fail(chalk.red('Failed to resolve issue ID'));
+          console.error(chalk.red(`\n✗ Error: Could not fetch issues list\n`));
+          process.exit(1);
+        }
+
+        const listData = await listResponse.json() as ListIssuesResponse;
+        const matchingIssue = listData.issues.find(issue => issue.id.startsWith(issueId));
+
+        if (!matchingIssue) {
+          spinner.fail(chalk.red('Issue not found'));
+          console.error(chalk.red(`\n✗ Error: No issue found with ID starting with '${issueId}'\n`));
+          process.exit(1);
+        }
+
+        fullIssueId = matchingIssue.id;
+        spinner.succeed(chalk.green(`Resolved to ${fullIssueId}`));
+      }
+
+      const spinner = ora('Fetching issue events...').start();
+
+      // Build query parameters
+      const params = new URLSearchParams({
+        limit: options.limit,
+        offset: options.offset,
+      });
+
+      // Fetch events from API (CLI endpoint)
+      const url = `${apiUrl}/api/v1/cli/issues/${fullIssueId}/events?${params.toString()}`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-API-Key': apiKey,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json() as any;
+        spinner.fail(chalk.red('Failed to fetch events'));
+        console.error(chalk.red(`\n✗ Error: ${error.error || 'Unknown error'}\n`));
+        process.exit(1);
+      }
+
+      const data = await response.json() as { events: ErrorEvent[], issue: IssueDetails };
+      spinner.succeed(chalk.green('Events fetched'));
+
+      if (!data.events || data.events.length === 0) {
+        if (options.format === 'json') {
+          console.log(JSON.stringify({ events: [], issue: data.issue }, null, 2));
+        } else {
+          console.log(chalk.yellow('\nNo events found for this issue.\n'));
+        }
+        return;
+      }
+
+      // JSON format output
+      if (options.format === 'json') {
+        console.log(JSON.stringify(data, null, 2));
+        return;
+      }
+
+      // Table format output
+      console.log(chalk.bold.cyan('\n🐛 Issue Events\n'));
+      console.log(`${chalk.gray('Issue:')} ${chalk.white(data.issue.title)}`);
+      console.log(`${chalk.gray('ID:')}    ${chalk.white(fullIssueId)}\n`);
+      console.log(chalk.bold(`📋 Found ${chalk.cyan(data.events.length)} event${data.events.length !== 1 ? 's' : ''}\n`));
+
+      // Display events
+      for (let i = 0; i < data.events.length; i++) {
+        const event = data.events[i];
+        console.log(chalk.bold(`\n${i + 1}. Event ${chalk.gray(event.id.substring(0, 8))}`));
+        console.log(`   ${chalk.gray('Timestamp:')}    ${formatDateLong(event.timestamp)}`);
+
+        if (event.environment) {
+          console.log(`   ${chalk.gray('Environment:')} ${chalk.cyan(event.environment)}`);
+        }
+        if (event.release_version) {
+          console.log(`   ${chalk.gray('Version:')}     ${chalk.cyan(event.release_version)}`);
+        }
+
+        // Show context data if available
+        if (event.context && Object.keys(event.context).length > 0) {
+          console.log(`   ${chalk.gray('Context:')}`);
+          const contextKeys = Object.keys(event.context).filter(k => k !== 'frames');
+          if (contextKeys.length > 0) {
+            for (const key of contextKeys.slice(0, 5)) {
+              const value = event.context[key];
+              const valueStr = typeof value === 'object' ? JSON.stringify(value).substring(0, 50) + '...' : String(value).substring(0, 50);
+              console.log(`     ${chalk.dim(key)}: ${chalk.white(valueStr)}`);
+            }
+            if (contextKeys.length > 5) {
+              console.log(chalk.dim(`     ... and ${contextKeys.length - 5} more fields`));
+            }
+          }
+        }
+
+        console.log(chalk.gray('   ─'.repeat(40)));
+      }
+
+      console.log(chalk.gray(`\nShowing ${data.events.length} event${data.events.length !== 1 ? 's' : ''} (offset: ${options.offset})`));
+      console.log(chalk.dim('View full details: keplog issues show <issue-id> --format json\n'));
+
+    } catch (error: any) {
+      console.error(chalk.red(`\n✗ Error: ${error.message}\n`));
+      process.exit(1);
+    }
+  });
+
 // Main issues command
 export const issuesCommand = new Command('issues')
   .description('Manage and view issues')
   .addCommand(listSubcommand)
-  .addCommand(showSubcommand);
+  .addCommand(showSubcommand)
+  .addCommand(eventsSubcommand);
 
 // Helper functions
 function truncate(str: string, maxLength: number): string {
