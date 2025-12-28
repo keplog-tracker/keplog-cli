@@ -61,12 +61,23 @@ interface IssueDetails extends Issue {
   mapped_stack_trace?: MappedStackTrace;
 }
 
+interface ErrorEvent {
+  id: string;
+  issue_id: string;
+  stack_trace?: string;
+  context?: ErrorContext;
+  mapped_stack_trace?: MappedStackTrace;
+  environment?: string;
+  release_version?: string;
+}
+
 interface ListIssuesResponse {
   issues: Issue[];
 }
 
 interface GetIssueResponse {
   issue: IssueDetails;
+  latest_event?: ErrorEvent;
 }
 
 // List subcommand
@@ -129,8 +140,8 @@ const listSubcommand = new Command('list')
         params.append('date_to', options.to);
       }
 
-      // Fetch issues from API
-      const url = `${apiUrl}/api/v1/projects/${projectId}/issues?${params.toString()}`;
+      // Fetch issues from API (CLI endpoint)
+      const url = `${apiUrl}/api/v1/cli/projects/${projectId}/issues?${params.toString()}`;
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -180,16 +191,16 @@ const listSubcommand = new Command('list')
       for (const issue of data.issues) {
         const shortId = issue.id.substring(0, 8);
         const title = truncate(issue.title, titleWidth - 2);
-        const status = colorStatus(issue.status).padEnd(statusWidth);
-        const level = colorLevel(issue.level).padEnd(levelWidth);
+        const statusText = issue.status.padEnd(statusWidth);
+        const levelText = issue.level.padEnd(levelWidth);
         const count = issue.occurrences.toString().padEnd(occWidth);
         const lastSeen = formatDate(issue.last_seen);
 
         console.log(
           chalk.white(shortId.padEnd(idWidth)) +
           title.padEnd(titleWidth) +
-          status +
-          level +
+          colorStatus(statusText) +
+          colorLevel(levelText) +
           chalk.cyan(count) +
           chalk.gray(lastSeen)
         );
@@ -207,7 +218,8 @@ const listSubcommand = new Command('list')
 // Show subcommand
 const showSubcommand = new Command('show')
   .description('Show detailed information about an issue')
-  .argument('<issue-id>', 'Issue ID to display')
+  .argument('<issue-id>', 'Issue ID to display (short or full UUID)')
+  .option('-p, --project-id <id>', 'Project ID (overrides config)')
   .option('-k, --api-key <key>', 'API key (overrides config)')
   .option('-u, --api-url <url>', 'API URL (overrides config)')
   .option('--show-minified', 'Show minified stack trace (if source maps available)')
@@ -216,6 +228,7 @@ const showSubcommand = new Command('show')
       // Read config from file
       const config = ConfigManager.getConfig();
 
+      const projectId = options.projectId || config.projectId;
       const apiKey = options.apiKey || config.apiKey;
       const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
 
@@ -231,10 +244,53 @@ const showSubcommand = new Command('show')
 
       console.log(chalk.bold.cyan('\n🐛 Keplog Issue Details\n'));
 
+      let fullIssueId = issueId;
+
+      // If issue ID is short (8 chars), fetch full UUID from list
+      if (issueId.length === 8) {
+        if (!projectId) {
+          console.error(chalk.red('\n✗ Error: Project ID is required for short issue IDs\n'));
+          console.log('Options:');
+          console.log('  1. Run: keplog init (recommended)');
+          console.log('  2. Use flag: --project-id=<your-project-id>');
+          console.log('  3. Use full UUID instead of short ID\n');
+          process.exit(1);
+        }
+
+        const spinner = ora('Resolving short issue ID...').start();
+
+        // Fetch issues to find the full UUID
+        const listUrl = `${apiUrl}/api/v1/cli/projects/${projectId}/issues?limit=1000`;
+        const listResponse = await fetch(listUrl, {
+          method: 'GET',
+          headers: {
+            'X-API-Key': apiKey,
+          },
+        });
+
+        if (!listResponse.ok) {
+          spinner.fail(chalk.red('Failed to resolve issue ID'));
+          console.error(chalk.red(`\n✗ Error: Could not fetch issues list\n`));
+          process.exit(1);
+        }
+
+        const listData = await listResponse.json() as ListIssuesResponse;
+        const matchingIssue = listData.issues.find(issue => issue.id.startsWith(issueId));
+
+        if (!matchingIssue) {
+          spinner.fail(chalk.red('Issue not found'));
+          console.error(chalk.red(`\n✗ Error: No issue found with ID starting with '${issueId}'\n`));
+          process.exit(1);
+        }
+
+        fullIssueId = matchingIssue.id;
+        spinner.succeed(chalk.green(`Resolved to ${fullIssueId}`));
+      }
+
       const spinner = ora('Fetching issue details...').start();
 
-      // Fetch issue from API
-      const url = `${apiUrl}/api/v1/issues/${issueId}`;
+      // Fetch issue from API (CLI endpoint)
+      const url = `${apiUrl}/api/v1/cli/issues/${fullIssueId}`;
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -251,6 +307,14 @@ const showSubcommand = new Command('show')
 
       const data = await response.json() as GetIssueResponse;
       const issue = data.issue;
+
+      // Merge latest_event data into issue if available
+      if (data.latest_event) {
+        issue.stack_trace = data.latest_event.stack_trace;
+        issue.context = data.latest_event.context;
+        issue.mapped_stack_trace = data.latest_event.mapped_stack_trace;
+      }
+
       spinner.succeed(chalk.green('Issue fetched'));
 
       // Display issue details
@@ -261,6 +325,14 @@ const showSubcommand = new Command('show')
       console.log(`${chalk.gray('Occurrences:')}  ${chalk.cyan(issue.occurrences)}`);
       console.log(`${chalk.gray('First Seen:')}   ${chalk.white(formatDateLong(issue.first_seen))}`);
       console.log(`${chalk.gray('Last Seen:')}    ${chalk.white(formatDateLong(issue.last_seen))}`);
+
+      // Display environment and version from latest event
+      if (data.latest_event?.environment) {
+        console.log(`${chalk.gray('Environment:')} ${chalk.cyan(data.latest_event.environment)}`);
+      }
+      if (data.latest_event?.release_version) {
+        console.log(`${chalk.gray('Version:')}     ${chalk.cyan(data.latest_event.release_version)}`);
+      }
 
       if (issue.assigned_user_name) {
         console.log(`${chalk.gray('Assigned To:')}  ${chalk.white(issue.assigned_user_name)}`);
@@ -358,6 +430,10 @@ const showSubcommand = new Command('show')
         // Plain text stack trace
         console.log(chalk.bold('\n📚 Stack Trace:\n'));
         console.log(chalk.gray(issue.stack_trace));
+      } else {
+        // No stack trace available
+        console.log(chalk.bold('\n📚 Stack Trace:\n'));
+        console.log(chalk.yellow('  No stack trace available for this issue.\n'));
       }
 
       if (hasMappedTrace && !showOriginal) {
