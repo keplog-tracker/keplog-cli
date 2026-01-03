@@ -74,7 +74,7 @@ export const initCommand = new Command('init')
           type: 'text',
           name: 'apiUrl',
           message: 'API URL (optional):',
-          initial: existingConfig.apiUrl || 'https://api.keplog.com',
+          initial: existingConfig.apiUrl || 'https://api.keplog.io',
         },
         {
           type: 'text',
@@ -94,7 +94,7 @@ export const initCommand = new Command('init')
       const config = {
         projectId: responses.projectId.trim(),
         apiKey: responses.apiKey.trim(),
-        apiUrl: responses.apiUrl?.trim() || 'https://api.keplog.com',
+        apiUrl: responses.apiUrl?.trim() || 'https://api.keplog.io',
         projectName: responses.projectName?.trim() || undefined,
       };
 

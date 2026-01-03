@@ -5,6 +5,7 @@ import FormData from 'form-data';
 import axios from 'axios';
 import chalk from 'chalk';
 import ora from 'ora';
+import cliProgress from 'cli-progress';
 
 interface UploadOptions {
   release: string;
@@ -85,22 +86,40 @@ export async function uploadSourceMaps(options: UploadOptions): Promise<void> {
     console.log();
   }
 
+  // Calculate total size of files
+  let totalSize = 0;
+  for (const filePath of mapFiles) {
+    const stats = fs.statSync(filePath);
+    totalSize += stats.size;
+  }
+
   // Create form data
-  const uploadSpinner = ora(`Uploading ${mapFiles.length} file(s) to Keplog...`).start();
+  const formData = new FormData();
+  formData.append('release', release);
+
+  // Add all files
+  for (const filePath of mapFiles) {
+    const fileName = path.basename(filePath);
+    const fileStream = fs.createReadStream(filePath);
+    formData.append('files', fileStream, fileName);
+  }
+
+  // Create progress bar
+  const progressBar = new cliProgress.SingleBar({
+    format: chalk.cyan('Uploading') + ' [{bar}] {percentage}% | {uploaded}/{total} | ETA: {eta}s',
+    barCompleteChar: '\u2588',
+    barIncompleteChar: '\u2591',
+    hideCursor: true,
+  }, cliProgress.Presets.shades_classic);
 
   try {
-    const formData = new FormData();
-    formData.append('release', release);
-
-    // Add all files
-    for (const filePath of mapFiles) {
-      const fileName = path.basename(filePath);
-      const fileStream = fs.createReadStream(filePath);
-      formData.append('files', fileStream, fileName);
-    }
-
     // Upload to API
     const url = `${apiUrl}/api/v1/cli/projects/${projectId}/sourcemaps`;
+
+    progressBar.start(totalSize, 0, {
+      uploaded: formatFileSize(0),
+      total: formatFileSize(totalSize),
+    });
 
     const response = await axios.post(url, formData, {
       headers: {
@@ -109,11 +128,19 @@ export async function uploadSourceMaps(options: UploadOptions): Promise<void> {
       },
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
+      onUploadProgress: (progressEvent) => {
+        const loaded = progressEvent.loaded || 0;
+        progressBar.update(loaded, {
+          uploaded: formatFileSize(loaded),
+          total: formatFileSize(totalSize),
+        });
+      },
     });
 
     const data = response.data as UploadResponse;
 
-    uploadSpinner.succeed('Upload complete!');
+    progressBar.stop();
+    console.log(chalk.green('✓ Upload complete!'));
 
     // Display results
     console.log(chalk.bold.green('\n✅ Upload Complete!\n'));
@@ -138,7 +165,8 @@ export async function uploadSourceMaps(options: UploadOptions): Promise<void> {
     console.log(chalk.cyan(`\n💡 Source maps will be used automatically when processing errors for release ${data.release}\n`));
 
   } catch (error: any) {
-    uploadSpinner.fail('Upload failed');
+    progressBar.stop();
+    console.log(chalk.red('✗ Upload failed'));
 
     if (axios.isAxiosError(error)) {
       if (error.code === 'ENOTFOUND') {

@@ -21,7 +21,7 @@ export const uploadCommand = new Command('upload')
       const files = options.files || [];
       const projectId = options.projectId || config.projectId;
       const apiKey = options.apiKey || config.apiKey;
-      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
+      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.io';
       const verbose = options.verbose || false;
 
       if (!release) {

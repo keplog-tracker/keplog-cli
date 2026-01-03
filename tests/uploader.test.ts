@@ -15,6 +15,21 @@ jest.mock('ora', () => {
   }));
 });
 
+// Mock cli-progress to avoid progress bar output during tests
+jest.mock('cli-progress', () => {
+  return {
+    SingleBar: jest.fn().mockImplementation(() => ({
+      start: jest.fn(),
+      update: jest.fn(),
+      stop: jest.fn(),
+      isActive: false,
+    })),
+    Presets: {
+      shades_classic: {},
+    },
+  };
+});
+
 describe('uploadSourceMaps', () => {
   let mock: MockAdapter;
   let testDir: string;
@@ -72,7 +87,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -100,7 +115,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '**/*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -130,7 +145,7 @@ describe('uploadSourceMaps', () => {
         ],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -156,7 +171,7 @@ describe('uploadSourceMaps', () => {
         ],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -171,7 +186,7 @@ describe('uploadSourceMaps', () => {
           filePatterns: [path.join(testDir, '*.map')],
           projectId: 'test-project',
           apiKey: 'test-key',
-          apiUrl: 'https://api.keplog.com',
+          apiUrl: 'https://api.keplog.io',
           verbose: false,
         });
       } catch (error) {
@@ -197,7 +212,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -230,7 +245,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-api-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -250,7 +265,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -271,7 +286,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).resolves.not.toThrow();
     });
@@ -289,7 +304,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -312,7 +327,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'invalid-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).rejects.toThrow('Invalid API key');
     });
@@ -327,7 +342,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'nonexistent',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).rejects.toThrow('Project not found');
     });
@@ -340,7 +355,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).rejects.toThrow();
     });
@@ -353,7 +368,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).rejects.toThrow();
     });
@@ -371,7 +386,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).rejects.toThrow();
     });
@@ -400,7 +415,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: ['[invalid-pattern'],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       })).rejects.toThrow();
     });
@@ -427,7 +442,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: true,
       });
 
@@ -440,7 +455,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -465,7 +480,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 
@@ -491,7 +506,7 @@ describe('uploadSourceMaps', () => {
         filePatterns: [path.join(testDir, '*.map')],
         projectId: 'test-project',
         apiKey: 'test-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         verbose: false,
       });
 

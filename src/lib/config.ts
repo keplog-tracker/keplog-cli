@@ -91,7 +91,7 @@ export class ConfigManager {
     return {
       projectId: fileConfig.projectId || process.env.KEPLOG_PROJECT_ID,
       apiKey: fileConfig.apiKey || process.env.KEPLOG_API_KEY,
-      apiUrl: fileConfig.apiUrl || process.env.KEPLOG_API_URL || 'https://api.keplog.com',
+      apiUrl: fileConfig.apiUrl || process.env.KEPLOG_API_URL || 'https://api.keplog.io',
       projectName: fileConfig.projectName,
     };
   }

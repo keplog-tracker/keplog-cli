@@ -45,7 +45,7 @@ describe('ConfigManager', () => {
       const config: KeplogConfig = {
         projectId: 'test-project-id',
         apiKey: 'test-api-key',
-        apiUrl: 'https://api.keplog.com',
+        apiUrl: 'https://api.keplog.io',
         projectName: 'Test Project',
       };
 
@@ -230,7 +230,7 @@ describe('ConfigManager', () => {
 
     it('should use default API URL when not specified', () => {
       const config = ConfigManager.getConfig();
-      expect(config.apiUrl).toBe('https://api.keplog.com');
+      expect(config.apiUrl).toBe('https://api.keplog.io');
     });
 
     it('should override default API URL with environment variable', () => {
@@ -374,7 +374,7 @@ describe('ConfigManager', () => {
       const fullConfig = ConfigManager.getConfig();
 
       expect(fullConfig.projectName).toBe('Optional Name');
-      expect(fullConfig.apiUrl).toBe('https://api.keplog.com'); // Default
+      expect(fullConfig.apiUrl).toBe('https://api.keplog.io'); // Default
     });
 
     it('should handle empty string values', () => {

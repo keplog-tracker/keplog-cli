@@ -27,7 +27,7 @@ export const releasesCommand = new Command('releases')
 
       const projectId = options.projectId || config.projectId;
       const apiKey = options.apiKey || config.apiKey;
-      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
+      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.io';
 
       // Validate required parameters
       if (!projectId) {

@@ -100,7 +100,7 @@ const listSubcommand = new Command('list')
 
       const projectId = options.projectId || config.projectId;
       const apiKey = options.apiKey || config.apiKey;
-      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
+      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.io';
 
       // Validate required parameters
       if (!projectId) {
@@ -126,8 +126,6 @@ const listSubcommand = new Command('list')
       console.log(`Status: ${chalk.yellow(options.status)}`);
       console.log(`Limit: ${chalk.gray(options.limit)}\n`);
 
-      const spinner = ora('Fetching issues...').start();
-
       // Build query parameters
       const params = new URLSearchParams({
         status: options.status,
@@ -141,6 +139,8 @@ const listSubcommand = new Command('list')
       if (options.to) {
         params.append('date_to', options.to);
       }
+
+      const spinner = ora('Connecting to API...').start();
 
       // Fetch issues from API (CLI endpoint)
       const url = `${apiUrl}/api/v1/cli/projects/${projectId}/issues?${params.toString()}`;
@@ -158,8 +158,11 @@ const listSubcommand = new Command('list')
         process.exit(1);
       }
 
+      spinner.text = 'Processing response...';
       const data = await response.json() as ListIssuesResponse;
-      spinner.succeed(chalk.green('Issues fetched'));
+
+      const count = data.issues?.length || 0;
+      spinner.succeed(chalk.green(`Fetched ${count} issue${count !== 1 ? 's' : ''}  `));
 
       // Display results
       if (!data.issues || data.issues.length === 0) {
@@ -244,7 +247,7 @@ const showSubcommand = new Command('show')
 
       const projectId = options.projectId || config.projectId;
       const apiKey = options.apiKey || config.apiKey;
-      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
+      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.io';
 
       // Validate required parameters
       if (!apiKey) {
@@ -271,10 +274,11 @@ const showSubcommand = new Command('show')
           process.exit(1);
         }
 
-        const spinner = ora('Resolving short issue ID...').start();
+        const spinner = ora('Connecting to API...').start();
 
         // Fetch issues to find the full UUID
         const listUrl = `${apiUrl}/api/v1/cli/projects/${projectId}/issues?limit=1000`;
+        spinner.text = 'Fetching issues list...';
         const listResponse = await fetch(listUrl, {
           method: 'GET',
           headers: {
@@ -288,6 +292,7 @@ const showSubcommand = new Command('show')
           process.exit(1);
         }
 
+        spinner.text = 'Resolving short ID...';
         const listData = await listResponse.json() as ListIssuesResponse;
         const matchingIssue = listData.issues.find(issue => issue.id.startsWith(issueId));
 
@@ -301,10 +306,11 @@ const showSubcommand = new Command('show')
         spinner.succeed(chalk.green(`Resolved to ${fullIssueId}`));
       }
 
-      const spinner = ora('Fetching issue details...').start();
+      const spinner = ora('Connecting to API...').start();
 
       // Fetch issue from API (CLI endpoint)
       const url = `${apiUrl}/api/v1/cli/issues/${fullIssueId}`;
+      spinner.text = 'Fetching issue details...';
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -319,6 +325,7 @@ const showSubcommand = new Command('show')
         process.exit(1);
       }
 
+      spinner.text = 'Processing response...';
       const data = await response.json() as GetIssueResponse;
       const issue = data.issue;
 
@@ -329,7 +336,7 @@ const showSubcommand = new Command('show')
         issue.mapped_stack_trace = data.latest_event.mapped_stack_trace;
       }
 
-      spinner.succeed(chalk.green('Issue fetched'));
+      spinner.succeed(chalk.green('Issue details fetched'));
 
       // JSON format output
       if (options.format === 'json') {
@@ -485,7 +492,7 @@ const eventsSubcommand = new Command('events')
 
       const projectId = options.projectId || config.projectId;
       const apiKey = options.apiKey || config.apiKey;
-      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.com';
+      const apiUrl = options.apiUrl || config.apiUrl || 'https://api.keplog.io';
 
       // Validate required parameters
       if (!apiKey) {
@@ -510,10 +517,11 @@ const eventsSubcommand = new Command('events')
           process.exit(1);
         }
 
-        const spinner = ora('Resolving short issue ID...').start();
+        const spinner = ora('Connecting to API...').start();
 
         // Fetch issues to find the full UUID
         const listUrl = `${apiUrl}/api/v1/cli/projects/${projectId}/issues?limit=1000`;
+        spinner.text = 'Fetching issues list...';
         const listResponse = await fetch(listUrl, {
           method: 'GET',
           headers: {
@@ -527,6 +535,7 @@ const eventsSubcommand = new Command('events')
           process.exit(1);
         }
 
+        spinner.text = 'Resolving short ID...';
         const listData = await listResponse.json() as ListIssuesResponse;
         const matchingIssue = listData.issues.find(issue => issue.id.startsWith(issueId));
 
@@ -540,16 +549,17 @@ const eventsSubcommand = new Command('events')
         spinner.succeed(chalk.green(`Resolved to ${fullIssueId}`));
       }
 
-      const spinner = ora('Fetching issue events...').start();
-
       // Build query parameters
       const params = new URLSearchParams({
         limit: options.limit,
         offset: options.offset,
       });
 
+      const spinner = ora('Connecting to API...').start();
+
       // Fetch events from API (CLI endpoint)
       const url = `${apiUrl}/api/v1/cli/issues/${fullIssueId}/events?${params.toString()}`;
+      spinner.text = 'Fetching issue events...';
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -564,8 +574,11 @@ const eventsSubcommand = new Command('events')
         process.exit(1);
       }
 
+      spinner.text = 'Processing response...';
       const data = await response.json() as { events: ErrorEvent[], issue: IssueDetails };
-      spinner.succeed(chalk.green('Events fetched'));
+
+      const count = data.events?.length || 0;
+      spinner.succeed(chalk.green(`Fetched ${count} event${count !== 1 ? 's' : ''}  `));
 
       if (!data.events || data.events.length === 0) {
         if (options.format === 'json') {
